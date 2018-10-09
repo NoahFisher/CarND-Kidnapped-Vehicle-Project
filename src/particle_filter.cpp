@@ -34,7 +34,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
   // @hyperparameter:
   //   guess for total number of particles. Can play with this later to see how changing orders of
   //   magnitude impacts the error.
-  num_particles = 10;
+  num_particles = 50;
 
   // Create normal (Gaussian) distributions for x, y, theta given std array
   normal_distribution<double> dist_x(x, std[0]);
@@ -69,8 +69,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
   // --- Code below
   default_random_engine gen;
 
-  for(int i = 0; i < num_particles; i++) {
-    Particle part = particles[i];
+  for(auto& part : particles) {
     double new_x;
     double new_y;
     double new_theta;
@@ -95,7 +94,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     part.x = dist_x(gen);
     part.y = dist_y(gen);
     part.weight = 1.0; // initialize weights to 1
-    weights[i] = 1.0;  // keep weights in sync with particles
   }
 }
 
@@ -123,22 +121,18 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> landmarks, std::ve
     // find the closest observation for each prediction and update the landmark id
     for(int j = 0; j < landmarks.size(); j++) {
       double tmpDst = dist(observations[i].x, observations[i].y, landmarks[j].x, landmarks[j].y);
-      //cout << "tmpDst= " << tmpDst << " minPredDist= " << minPredDist << "\t";
       if(tmpDst <= minPredDist) {
         minPredDist = tmpDst;
         nearestLandmark = landmarks[j];
       }
     }
-    //cout << "nearestLandmark.id " << nearestLandmark.id << endl;
     // set the observation to the nearest landmark.
     observations[i].id = nearestLandmark.id;
     observations[i].l_x = nearestLandmark.x;
     observations[i].l_y = nearestLandmark.y;
     observations[i].diff_x = nearestLandmark.x - observations[i].x;
     observations[i].diff_y = nearestLandmark.y - observations[i].y;
-    //cout << endl;
   }
-  //cout << endl;
 }
 
 void ParticleFilter::updateWeights(double sensor_range,
@@ -162,11 +156,8 @@ void ParticleFilter::updateWeights(double sensor_range,
   //  - first, transfer observations into global coordinate system
   //  - find the distance between each observation and all the map landmarks within the sensor
   //  range.
-  cout << "Timestep: " << timestep;
 
-  for(int p=0; p < num_particles; p++){
-    Particle part = particles[p];
-    cout << endl << "Particle: " << "(" << part.x << ", " << part.y << ")" << endl;
+  for (auto& part : particles) {
 
     // find landmarks within sensor range of particle
     vector<LandmarkObs> landmark_list;
@@ -191,21 +182,12 @@ void ParticleFilter::updateWeights(double sensor_range,
       transformed_obs.x = part.x + obs.x * cos(part.theta) - obs.y * sin(part.theta);
       transformed_obs.y = part.y + obs.x * sin(part.theta) + obs.y * cos(part.theta);
       transformed_observations.push_back(transformed_obs);
-      cout << "Observation(" << obs.x << ", " << obs.y << "). ";
-      cout << "Transformed(" << transformed_obs.x << ", " << transformed_obs.y << ") " << endl;
     }
 
     dataAssociation(landmark_list, transformed_observations);
 
-    // cout << "landmark_lis = " << endl;;
-    // for(int i=0; i < transformed_observations.size(); i++){
-    //   cout << "(" << transformed_observations[i].l_x << ", " << transformed_observations[i].l_y << ")\t";
-    // }
-    // cout << endl;
-
     // update weights
     part.weight = 1.0;
-    // cout << "particle weight = ";
     vector<int> associations;
     vector<double> sense_x;
     vector<double> sense_y;
@@ -215,23 +197,23 @@ void ParticleFilter::updateWeights(double sensor_range,
       double exponent = pow(obs.x - obs.l_x, 2) / (2 * pow(std_landmark[0], 2)) +
                         pow(obs.y - obs.l_y, 2) / (2 * pow(std_landmark[1], 2));
       double weight = exp( - 0.5 * exponent ) / (2 * M_PI * std_landmark[0] * std_landmark[1]);
-      // cout << weight << " \t ";
       part.weight *= weight;
       associations.push_back(obs.id);
-      sense_x.push_back(obs.x);
-      sense_y.push_back(obs.y);
+      sense_x.push_back(obs.l_x);
+      sense_y.push_back(obs.l_y);
 
-      cout << "Trans(" << transformed_observations[i].x << ", " << transformed_observations[i].y << ", " << transformed_observations[i].id << ") "
-           << "Landm(" << transformed_observations[i].l_x << ", " << transformed_observations[i].l_y << ", " << transformed_observations[i].id << ") "
-           << "Weigh(" << part.x - obs.l_x << ", " << part.y - obs.l_y << "), exp(" << exponent << "), weight=" << part.weight << endl;
+      // cout << "Trans(" << transformed_observations[i].x << ", " << transformed_observations[i].y << ", " << transformed_observations[i].id << ") "
+      //      << "Landm(" << transformed_observations[i].l_x << ", " << transformed_observations[i].l_y << ", " << transformed_observations[i].id << ") "
+      //      << "Weigh(" << part.x - obs.l_x << ", " << part.y - obs.l_y << "), exp(" << exponent << "), weight=" << part.weight << endl;
     }
 
-    cout << endl;
     SetAssociations(part, associations, sense_x, sense_y);
-    // cout << " ==> " << part.weight << "; ";
   }
 
-  cout << endl;
+  weights.clear();
+  for(auto& part : particles) {
+    weights.push_back(part.weight);
+  }
   timestep++;
 }
 
